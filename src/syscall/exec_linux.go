@@ -19,6 +19,11 @@ type SysProcIDMap struct {
 	Size        int // Size.
 }
 
+type RlimitSetting struct {
+	Resource int
+	Rlim     Rlimit
+}
+
 type SysProcAttr struct {
 	Chroot       string         // Chroot.
 	Credential   *Credential    // Credential.
@@ -40,6 +45,7 @@ type SysProcAttr struct {
 	// This parameter is no-op if GidMappings == nil. Otherwise for unprivileged
 	// users this should be set to false for mappings work.
 	GidMappingsEnableSetgroups bool
+	Rlimits                    []RlimitSetting
 }
 
 // Implemented in runtime package.
@@ -198,6 +204,14 @@ func forkAndExecInChild(argv0 *byte, argv, envv []*byte, chroot, dir *byte, attr
 	// Unshare
 	if sys.Unshareflags != 0 {
 		_, _, err1 = RawSyscall(SYS_UNSHARE, sys.Unshareflags, 0, 0)
+		if err1 != 0 {
+			goto childerror
+		}
+	}
+
+	// Set resource limits
+	for i = range sys.Rlimits {
+		_, _, err1 = RawSyscall(SYS_SETRLIMIT, uintptr(sys.Rlimits[i].Resource), uintptr(unsafe.Pointer(&sys.Rlimits[i].Rlim)), 0)
 		if err1 != 0 {
 			goto childerror
 		}
